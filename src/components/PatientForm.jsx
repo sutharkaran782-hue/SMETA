@@ -1,10 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createPatientRecord,
   isSupabaseConfigured,
   uploadPatientImage,
 } from "../services/supabase";
-import { analyzeSeverity, getPriorityDisplay } from "../utils/severity.replacement";
+import { analyzeSeverity, getPriorityDisplay } from "../utils/triage";
 import PriorityBadge from "./PriorityBadge";
 
 const initialPreview = {
@@ -12,14 +12,92 @@ const initialPreview = {
   summary: "",
 };
 
-function PatientForm() {
+function PatientForm({ copy }) {
   const [symptoms, setSymptoms] = useState("");
   const [imageFile, setImageFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [preview, setPreview] = useState(initialPreview);
   const fileInputRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl("");
+      return undefined;
+    }
+
+    const objectUrl = URL.createObjectURL(imageFile);
+    setImagePreviewUrl(objectUrl);
+
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [imageFile]);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop?.();
+    };
+  }, []);
+
+  function handleVoiceInput() {
+    const SpeechRecognition =
+      globalThis.window?.SpeechRecognition || globalThis.window?.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setError(copy.voiceUnsupported);
+      setVoiceStatus("");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop?.();
+      setIsListening(false);
+      setVoiceStatus("");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-IN";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognitionRef.current = recognition;
+    setError("");
+    setVoiceStatus(copy.voiceListening);
+    setIsListening(true);
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript ?? "")
+        .join(" ")
+        .trim();
+
+      if (transcript) {
+        setSymptoms((currentSymptoms) =>
+          currentSymptoms
+            ? `${currentSymptoms}${currentSymptoms.endsWith(" ") ? "" : " "}${transcript}`
+            : transcript,
+        );
+        setVoiceStatus(copy.voiceCaptured);
+      }
+    };
+
+    recognition.onerror = () => {
+      setError(copy.voiceFailed);
+      setVoiceStatus("");
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -31,7 +109,7 @@ function PatientForm() {
     });
 
     if (!trimmedSymptoms) {
-      setError("Symptoms are required before submitting.");
+      setError(copy.requiredError);
       setSuccess("");
       return;
     }
@@ -61,11 +139,11 @@ function PatientForm() {
         priority: analysis.priority,
         imageUrl,
       });
-      setSuccess(
-        `Patient submitted successfully. Severity assigned: ${display.icon} ${display.label}.`,
-      );
+      setSuccess(copy.submitSuccess(display.label));
       setSymptoms("");
       setImageFile(null);
+      setImagePreviewUrl("");
+      setVoiceStatus("");
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -80,22 +158,32 @@ function PatientForm() {
   return (
     <form className="form" onSubmit={handleSubmit}>
       <div className="field">
-        <label htmlFor="symptoms">Symptoms</label>
+        <div className="field__toolbar">
+          <label htmlFor="symptoms">{copy.symptomsLabel}</label>
+          <button
+            className={`button button--secondary button--small${
+              isListening ? " button--listening" : ""
+            }`}
+            type="button"
+            onClick={handleVoiceInput}
+          >
+            {isListening ? copy.voiceStop : copy.voiceStart}
+          </button>
+        </div>
         <textarea
           id="symptoms"
           name="symptoms"
-          placeholder="Describe the patient's symptoms, for example: chest pain, sweating, dizziness"
+          placeholder={copy.symptomsPlaceholder}
           value={symptoms}
           onChange={(event) => setSymptoms(event.target.value)}
           required
         />
-        <span className="field__hint">
-          Required. The rule-based system checks for emergency keywords instantly.
-        </span>
+        <span className="field__hint">{copy.symptomsHint}</span>
+        <span className="status-text">{voiceStatus || copy.voiceReady}</span>
       </div>
 
       <div className="field">
-        <label htmlFor="image">Upload image</label>
+        <label htmlFor="image">{copy.uploadLabel}</label>
         <input
           ref={fileInputRef}
           id="image"
@@ -106,16 +194,19 @@ function PatientForm() {
         />
         <span className="field__hint">
           {isSupabaseConfigured
-            ? "Optional. Images are stored in Supabase Storage."
-            : "Optional. Without Supabase, the image stays only in this browser demo."}
+            ? copy.uploadHintSupabase
+            : copy.uploadHintLocal}
         </span>
+        {imagePreviewUrl ? (
+          <div className="media-preview">
+            <span className="status-text">{copy.previewLabel}</span>
+            <img src={imagePreviewUrl} alt={copy.uploadAlt} />
+          </div>
+        ) : null}
       </div>
 
       {!isSupabaseConfigured ? (
-        <div className="message message--info">
-          Supabase is not connected yet. New submissions will still work and stay saved
-          in this browser until you add your `.env` keys.
-        </div>
+        <div className="message message--info">{copy.localMode}</div>
       ) : null}
       {error ? <div className="message message--error">{error}</div> : null}
       {success ? <div className="message message--success">{success}</div> : null}
@@ -123,18 +214,18 @@ function PatientForm() {
       {preview.priority ? (
         <div className="result-card">
           <div>
-            <span className="status-text">Latest triage result</span>
+            <span className="status-text">{copy.triageResult}</span>
           </div>
           <PriorityBadge priority={preview.priority} />
           <div>
-            <strong>Emergency summary</strong>
+            <strong>{copy.summaryTitle}</strong>
             <p className="panel__text">{preview.summary}</p>
           </div>
         </div>
       ) : null}
 
       <button className="button" type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Submitting..." : "Submit Patient for Triage"}
+        {isSubmitting ? copy.submitBusy : copy.submitIdle}
       </button>
     </form>
   );

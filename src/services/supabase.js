@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { analyzeSeverity } from "../utils/triage";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
@@ -154,6 +155,18 @@ export async function createPatientRecord(payload) {
   return data;
 }
 
+export async function createSimulatedCriticalPatient() {
+  const symptoms = "Severe chest pain, sweating, and difficulty breathing before arrival.";
+  const analysis = analyzeSeverity(symptoms);
+
+  return createPatientRecord({
+    symptoms,
+    priority: analysis.priority,
+    summary: analysis.summary,
+    image_url: null,
+  });
+}
+
 export async function getPatients() {
   if (!supabase) {
     console.log("[storage] Loading patient queue from browser storage");
@@ -174,4 +187,26 @@ export async function getPatients() {
 
   console.log("[supabase] Fetch succeeded", { count: data?.length ?? 0 });
   return data ?? [];
+}
+
+export function subscribeToPatients(onChange) {
+  if (!supabase) {
+    return () => {};
+  }
+
+  const channel = supabase
+    .channel(`patients-feed-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "patients" },
+      (payload) => {
+        console.log("[supabase] Realtime patient event received", payload.eventType);
+        onChange?.(payload);
+      },
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
