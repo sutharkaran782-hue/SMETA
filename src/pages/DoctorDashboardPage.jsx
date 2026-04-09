@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import QueueList from "../components/QueueList";
 import {
   createSimulatedCriticalPatient,
@@ -7,6 +8,7 @@ import {
   subscribeToPatients,
 } from "../services/supabase";
 import { sortPatientsByPriority } from "../utils/triage";
+import { logoutDoctor } from "../utils/auth";
 
 function DoctorDashboardPage({ copy, queueCopy }) {
   const [patients, setPatients] = useState([]);
@@ -86,6 +88,8 @@ function DoctorDashboardPage({ copy, queueCopy }) {
     };
   }, [incomingAlert]);
 
+  const navigate = useNavigate();
+
   async function handleSimulateIncomingPatient() {
     setIsSimulating(true);
     setError("");
@@ -117,6 +121,16 @@ function DoctorDashboardPage({ copy, queueCopy }) {
         </div>
 
         <div className="dashboard-actions">
+          <button
+            className="button button--secondary"
+            type="button"
+            onClick={() => {
+              logoutDoctor();
+              navigate("/", { replace: true });
+            }}
+          >
+            Logout
+          </button>
           <button
             className="button button--danger"
             type="button"

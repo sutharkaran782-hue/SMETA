@@ -24,7 +24,7 @@ function Layout({ children, copy, language, onLanguageChange }) {
                 {copy.patientIntake}
               </NavLink>
               <NavLink
-                to="/dashboard"
+                to="/doctor-login"
                 className={({ isActive }) =>
                   isActive ? "nav__link nav__link--active" : "nav__link"
                 }

@@ -6,22 +6,30 @@ function PatientInputPage({ copy, formCopy }) {
       <section className="hero">
         <div className="hero__card">
           <span className="hero__eyebrow">{copy.eyebrow}</span>
-          <h2>{copy.title}</h2>
-          <p>{copy.description}</p>
+          <div className="hero__content">
+            <h2>{copy.title}</h2>
+            <p>{copy.description}</p>
+          </div>
         </div>
 
         <div className="hero__card hero__card--stats">
           <div className="stats">
             <div className="stat">
-              <p className="stat__value">{"\uD83D\uDEA8"}</p>
+              <p className="stat__value" aria-hidden="true">
+                {"\uD83D\uDEA8"}
+              </p>
               <p className="stat__label">{copy.statCritical}</p>
             </div>
             <div className="stat">
-              <p className="stat__value">{"\uD83D\uDFE0"}</p>
+              <p className="stat__value" aria-hidden="true">
+                {"\uD83D\uDFE0"}
+              </p>
               <p className="stat__label">{copy.statUrgent}</p>
             </div>
             <div className="stat">
-              <p className="stat__value">{"\uD83D\uDFE2"}</p>
+              <p className="stat__value" aria-hidden="true">
+                {"\uD83D\uDFE2"}
+              </p>
               <p className="stat__label">{copy.statStable}</p>
             </div>
           </div>

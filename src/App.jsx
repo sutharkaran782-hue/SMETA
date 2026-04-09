@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import DoctorDashboardPage from "./pages/DoctorDashboardPage";
+import DoctorLoginPage from "./pages/DoctorLoginPage";
 import PatientInputPage from "./pages/PatientInputPage.replacement";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const translations = {
   en: {
@@ -190,9 +192,14 @@ function App() {
           path="/"
           element={<PatientInputPage copy={copy.patientPage} formCopy={copy.form} />}
         />
+        <Route path="/doctor-login" element={<DoctorLoginPage />} />
         <Route
           path="/dashboard"
-          element={<DoctorDashboardPage copy={copy.dashboard} queueCopy={copy.queue} />}
+          element={
+            <ProtectedRoute>
+              <DoctorDashboardPage copy={copy.dashboard} queueCopy={copy.queue} />
+            </ProtectedRoute>
+          }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

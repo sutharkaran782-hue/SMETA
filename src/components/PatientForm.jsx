@@ -5,7 +5,10 @@ import {
   uploadPatientImage,
 } from "../services/supabase";
 import { analyzeSeverity, getPriorityDisplay } from "../utils/triage";
+import { analyzeEmergencyCall, getAmbulanceAssignment } from "../utils/triageEngine";
 import PriorityBadge from "./PriorityBadge";
+import EmergencyCallButton from "./EmergencyCallButton";
+import AmbulanceAssignment from "./AmbulanceAssignment";
 
 const initialPreview = {
   priority: "",
@@ -20,8 +23,13 @@ function PatientForm({ copy }) {
   const [isListening, setIsListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState("");
   const [error, setError] = useState("");
+  const [callError, setCallError] = useState("");
   const [success, setSuccess] = useState("");
   const [preview, setPreview] = useState(initialPreview);
+  const [emergencyTranscript, setEmergencyTranscript] = useState("");
+  const [callAnalysis, setCallAnalysis] = useState(null);
+  const [ambulanceAssignment, setAmbulanceAssignment] = useState(null);
+  const [isProcessingCall, setIsProcessingCall] = useState(false);
   const fileInputRef = useRef(null);
   const recognitionRef = useRef(null);
 
@@ -42,6 +50,37 @@ function PatientForm({ copy }) {
       recognitionRef.current?.stop?.();
     };
   }, []);
+
+  function processEmergencyCall(transcript) {
+    if (!transcript.trim()) {
+      return;
+    }
+
+    setIsProcessingCall(true);
+    setCallError("");
+    setSuccess("");
+
+    const analysis = analyzeEmergencyCall(transcript);
+    const assignment = getAmbulanceAssignment(analysis.score);
+
+    setEmergencyTranscript(transcript);
+    setCallAnalysis(analysis);
+    setAmbulanceAssignment(assignment);
+    setPreview({
+      priority: analysis.priority,
+      summary: analysis.summary,
+    });
+    setSymptoms((currentSymptoms) =>
+      currentSymptoms
+        ? `${currentSymptoms}${currentSymptoms.endsWith(" ") ? "" : " "}${transcript}`
+        : transcript,
+    );
+
+    setTimeout(() => {
+      setIsProcessingCall(false);
+      setVoiceStatus("Emergency call processed.");
+    }, 600);
+  }
 
   function handleVoiceInput() {
     const SpeechRecognition =
@@ -157,6 +196,42 @@ function PatientForm({ copy }) {
 
   return (
     <form className="form" onSubmit={handleSubmit}>
+      <div className="field field--call">
+        <div className="field__toolbar">
+          <label>Emergency Call Simulation</label>
+          <span className="status-text">
+            {isProcessingCall ? "Processing emergency audio..." : "Use the button to capture a spoken emergency."}
+          </span>
+        </div>
+        <EmergencyCallButton
+          onEmergencyDetected={(transcript) => {
+            try {
+              processEmergencyCall(transcript);
+            } catch (error) {
+              setCallError("Unable to process emergency call.");
+            }
+          }}
+          processing={isProcessingCall}
+        />
+        {callError ? <div className="message message--error">{callError}</div> : null}
+        {callAnalysis ? (
+          <div className={`result-card result-card--call result-card--${callAnalysis.color}`}>
+            <p className="status-text">Triage Score: {callAnalysis.score} ({callAnalysis.label})</p>
+            <p>{callAnalysis.summary}</p>
+          </div>
+        ) : null}
+        {callAnalysis?.score === 1 ? (
+          <div className="alert-banner alert-banner--critical">
+            <span>🚨</span>
+            <div>
+              <strong>Critical Patient Incoming</strong>
+              <p>Priority 1 emergency detected from the call.</p>
+            </div>
+          </div>
+        ) : null}
+        <AmbulanceAssignment assignment={ambulanceAssignment} />
+      </div>
+
       <div className="field">
         <div className="field__toolbar">
           <label htmlFor="symptoms">{copy.symptomsLabel}</label>
